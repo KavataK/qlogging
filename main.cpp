@@ -141,13 +141,25 @@ void requestToPrune(QCPtr& qc, uint64_t* passcode, uint64_t requestedLogId) {
 
 bool getLogFromNodeLargeBatch(QCPtr &qc, uint64_t *passcode, uint64_t start, uint64_t end)
 {
-    if (gLastProcessedLogId == UINT64_MAX)
+    if (gLastProcessedLogId != UINT64_MAX)
     {
-        gLastProcessedLogId = 0;
+        // Log IDs can restart when epoch changes (or node reloads state).
+        // If stored cursor is ahead of the requested range, do not skip this new range.
+        if (gLastProcessedLogId > end)
+        {
+            LOG("Detected log id reset/epoch change: last=%llu, requested=[%llu..%llu]. Resetting cursor.\n",
+                gLastProcessedLogId, start, end);
+            gLastProcessedLogId = UINT64_MAX;
+        }
+        else
+        {
+            start = std::max(gLastProcessedLogId + 1, start);
+        }
     }
-    else
+
+    if (start > end)
     {
-        start = std::max(gLastProcessedLogId + 1, start);
+        return true;
     }
     for (uint64_t s = start; s <= end; s += MAX_LOG_EVENT_PER_CALL)
     {
@@ -464,7 +476,7 @@ int run(int argc, char *argv[]) {
         if (strcmp(argv[i], "-single") == 0 || strcmp(argv[i], "-s") == 0)
             singleTickMode = true;
         else if (gLastProcessedLogId == UINT64_MAX)
-            gLastProcessedLogId = charToNumber<unsigned int>(argv[i]);
+            gLastProcessedLogId = charToNumber<unsigned long long>(argv[i]);
     }
     QCPtr qc;
     uint32_t currentTick = 0;
