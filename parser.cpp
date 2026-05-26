@@ -11,6 +11,34 @@
 // 0 is short form, 1 is more details, 2 is all details
 int parseToStringDetailLevel = 1;
 
+bool gSuppressZeroQuTransfers = false;
+
+static const char ZERO_IDENTITY[] =
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFXIB";
+
+static uint8_t gZeroIdentityPublicKey[32] = { 0 };
+static bool gZeroIdentityPublicKeyReady = false;
+
+static void ensureZeroIdentityPublicKey()
+{
+    if (gZeroIdentityPublicKeyReady)
+        return;
+    getPublicKeyFromIdentity(ZERO_IDENTITY, gZeroIdentityPublicKey);
+    gZeroIdentityPublicKeyReady = true;
+}
+
+static bool isZeroQuTransfer(const uint8_t* ptr)
+{
+    // QU transfer payload layout: [src_pubkey(32) | dst_pubkey(32) | amount(8) | ...]
+    uint64_t amount = 0;
+    memcpy(&amount, ptr + 64, sizeof(amount));
+    if (amount != 0)
+        return false;
+
+    ensureZeroIdentityPublicKey();
+    return memcmp(ptr + 32, gZeroIdentityPublicKey, 32) == 0;
+}
+
 #define QU_TRANSFER 0
 #define QU_TRANSFER_LOG_SIZE 72
 #define ASSET_ISSUANCE 1
@@ -431,10 +459,14 @@ unsigned long long printQubicLog(uint8_t* logBuffer, int bufferSize, uint64_t fr
         }
         logBuffer += LOG_HEADER_SIZE;
         std::string humanLog = "null";
+        bool skipOutput = false;
         switch(messageType){
             case QU_TRANSFER:
                 if (messageSize == QU_TRANSFER_LOG_SIZE){ // with or without transfer ID
-                    humanLog = parseLogToString_type0(logBuffer);
+                    if (gSuppressZeroQuTransfers && isZeroQuTransfer(logBuffer))
+                        skipOutput = true;
+                    else
+                        humanLog = parseLogToString_type0(logBuffer);
                 } else {
                     LOG("Malfunction buffer size for QU_TRANSFER log\n");
                 }
@@ -526,20 +558,23 @@ unsigned long long printQubicLog(uint8_t* logBuffer, int bufferSize, uint64_t fr
                 break;
             }
         }
-        if (isBigChunk)
+        if (!skipOutput)
         {
-            if ((logId < (fromId + 10) || (logId > toId - 10)))
+            if (isBigChunk)
+            {
+                if ((logId < (fromId + 10) || (logId > toId - 10)))
+                {
+                    LOG("[%llu] %u.%03d %s: %s\n", logId, tick, epoch, mt.c_str(), humanLog.c_str());
+                }
+            }
+            else
             {
                 LOG("[%llu] %u.%03d %s: %s\n", logId, tick, epoch, mt.c_str(), humanLog.c_str());
             }
         }
-        else
-        {
-            LOG("[%llu] %u.%03d %s: %s\n", logId, tick, epoch, mt.c_str(), humanLog.c_str());
-        }
         
         
-        if (humanLog == "null"){
+        if (!skipOutput && humanLog == "null"){
             char buff[1024*2 + 1] = {0};
             for (unsigned int i = 0; i < std::min(messageSize, (uint32_t)1024); i++){
                 sprintf(buff + i*2, "%02x", logBuffer[i]);

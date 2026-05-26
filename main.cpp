@@ -448,7 +448,7 @@ void printTxMapTable(ResponseAllLogIdRangesFromTick& txmap)
 
 int run(int argc, char *argv[]) {
     if (argc < 8) {
-        printf("./qlogging [nodeip] [nodeport] [passcode u64 x 4] [tick to start] [start logId (optional)] [-s | -single] \n");
+        printf("./qlogging [nodeip] [nodeport] [passcode u64 x 4] [tick to start] [start logId (optional)] [-s | -single] [-hide-0qu]\n");
         return 0;
     }
     
@@ -463,6 +463,8 @@ int run(int argc, char *argv[]) {
     for (int i = 8; i < argc; i++) {
         if (strcmp(argv[i], "-single") == 0 || strcmp(argv[i], "-s") == 0)
             singleTickMode = true;
+        else if (strcmp(argv[i], "-hide-0qu") == 0)
+            gSuppressZeroQuTransfers = true;
         else if (gLastProcessedLogId == UINT64_MAX)
             gLastProcessedLogId = charToNumber<unsigned int>(argv[i]);
     }
