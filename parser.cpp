@@ -13,18 +13,17 @@ int parseToStringDetailLevel = 1;
 
 bool gSuppressZeroQuTransfers = false;
 
-static const char ZERO_IDENTITY[] =
-    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFXIB";
+static char ZERO_IDENTITY[61] = { 0 };
+static bool gZeroIdentityReady = false;
 
-static uint8_t gZeroIdentityPublicKey[32] = { 0 };
-static bool gZeroIdentityPublicKeyReady = false;
-
-static void ensureZeroIdentityPublicKey()
+static void ensureZeroIdentity()
 {
-    if (gZeroIdentityPublicKeyReady)
+    if (gZeroIdentityReady)
         return;
-    getPublicKeyFromIdentity(ZERO_IDENTITY, gZeroIdentityPublicKey);
-    gZeroIdentityPublicKeyReady = true;
+
+    uint8_t zeroPublicKey[32] = { 0 };
+    getIdentityFromPublicKey(zeroPublicKey, ZERO_IDENTITY, false);
+    gZeroIdentityReady = true;
 }
 
 static bool isZeroQuTransfer(const uint8_t* ptr)
@@ -35,8 +34,10 @@ static bool isZeroQuTransfer(const uint8_t* ptr)
     if (amount != 0)
         return false;
 
-    ensureZeroIdentityPublicKey();
-    return memcmp(ptr + 32, gZeroIdentityPublicKey, 32) == 0;
+    char destIdentity[61] = { 0 };
+    getIdentityFromPublicKey(ptr + 32, destIdentity, false);
+    ensureZeroIdentity();
+    return strcmp(destIdentity, ZERO_IDENTITY) == 0;
 }
 
 #define QU_TRANSFER 0
